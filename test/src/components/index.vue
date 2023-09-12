@@ -30,6 +30,7 @@ export default {
   methods: {
     initMap() {
       this.map = new Map({
+        controls: [],
         layers: [      //图层数组，可视内容实际由各个图层堆叠而成
           new TileLayer({    //瓦片图层
             source: new XYZ({   //数据源
@@ -41,6 +42,8 @@ export default {
         view: new View({   //视图设置
           center: [20037508, 1746891],  //设置地图的初始显示区域将以经度 0 和纬度 0 为中心
           zoom: 3,
+          maxZoom:5,  //最大放大倍数
+          minZoom:2.5,
         }),
       });
     },
@@ -120,10 +123,10 @@ export default {
         }))
         source.addFeature(featurePoint);
 
-        if (index < points.length - 1) {
-          let nextPosition = [points[index + 1].lng, points[index + 1].lat];
+        if (index !=0) {
+          let lastPosition = [points[index - 1].lng, points[index - 1].lat];
           let featureLine = new Feature({
-            geometry: new LineString([fromLonLat(position), fromLonLat(nextPosition)])
+            geometry: new LineString([fromLonLat(lastPosition), fromLonLat(position)])
           })
           source.addFeature(featureLine)
         }
