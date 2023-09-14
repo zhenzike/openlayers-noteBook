@@ -15,7 +15,7 @@ import VectorSource from 'ol/source/Vector';
 import point from 'ol/geom/Point';
 import { fromLonLat } from 'ol/proj';
 import { Circle, Style, Fill } from 'ol/style'
-import { LineString, MultiLineString } from 'ol/geom';
+import { LineString, MultiLineString, Polygon } from 'ol/geom';
 import VectorLayer from 'ol/layer/Vector';
 export default {
   data() {
@@ -42,8 +42,8 @@ export default {
         view: new View({   //视图设置
           center: [20037508, 1746891],  //设置地图的初始显示区域将以经度 0 和纬度 0 为中心
           zoom: 3,
-          maxZoom:5,  //最大放大倍数
-          minZoom:2.5,
+          maxZoom: 5,  //最大放大倍数
+          minZoom: 2.5,
         }),
       });
     },
@@ -56,6 +56,113 @@ export default {
         this.setTimeCreatePointLine(points);
       })
     },
+
+    //随时间生成点和线
+    setTimeCreatePointLine(points) {
+      let index = 0;
+      let layer = new VectorLayer();
+      let source = new VectorSource();
+      layer.setSource(source)
+      let lineSetTime = setInterval(() => {
+        if (index == points.length - 1) clearInterval(lineSetTime);
+        let position = [points[index].lng, points[index].lat];
+        let featurePoint = new Feature({
+          geometry: new point(fromLonLat(position))
+        })
+        featurePoint.setStyle(new Style({
+          image: new Circle({
+            fill: new Fill({
+              color: this.judgeColorByWindLevel(points[index].strong)
+            }),
+            radius: 4
+          })
+        }))
+
+        if(points[index].radius7.length!=0||points[index].radius7!=null){
+          let featureSolar=this.drawSolar(points[index]);
+          source.addFeature(featureSolar)
+        }
+
+
+
+        source.addFeature(featurePoint);
+
+        if (index != 0) {
+          let lastPosition = [points[index - 1].lng, points[index - 1].lat];
+          let featureLine = new Feature({
+            geometry: new LineString([fromLonLat(lastPosition), fromLonLat(position)])
+          })
+          source.addFeature(featureLine)
+        }
+        index++;
+
+      }, 600)
+
+      this.map.addLayer(layer)
+    },
+
+    //绘制风圈
+    drawSolar(point) {
+      let positionArr=[];
+      let data_R_arr = point.radius7.split('|').map(k => {
+        return parseFloat(k)
+      })
+
+      let Configs = {
+        data_X: parseFloat(point.lng),
+        data_Y: parseFloat(point.lat),
+        data_R: {
+          "SE": data_R_arr[0]/100,
+          "NE": data_R_arr[1]/100,
+          "NW": data_R_arr[2]/100,
+          "SW": data_R_arr[3]/100
+        }
+      };
+    
+      let _interval = 6
+      for (let i = 0; i < 360 / _interval; i++) {
+        let r = 0;
+        let angle = i * _interval;
+        if (angle > 0 && angle <= 90) {
+          r = Configs.data_R.NE;
+        }
+        else if (angle > 90 && angle <= 180) {
+          r = Configs.data_R.NW;
+        }
+        else if (angle > 180 && angle <= 270) {
+          r = Configs.data_R.SW;
+        }
+        else {
+          r = Configs.data_R.SE;
+        }
+
+        let x = Configs.data_X + r * Math.cos(angle * 3.14 / 180);
+        let y = Configs.data_Y + r * Math.sin(angle * 3.14 / 180);
+
+        positionArr.push(fromLonLat([x,y]))
+      }
+
+     
+      let feature=new Feature({
+        geometry:new Polygon([positionArr])   //这里接受的参数形式实际上是[[],[]]的形式，第一个数组为外部轮廓，第二个数组为内部挖孔，不传则只有一个无挖孔的多边形
+      });
+      return feature
+    },
+
+
+    //根据台风等级设置点的颜色
+    judgeColorByWindLevel(level) {
+      let colorMap = {
+        "热带风暴": 'green',
+        "热带低压": 'blue',
+        "台风": 'pink',
+        "强热带风暴": 'red',
+        "强台风": 'yellow',
+        "超强台风": 'salmon',
+      }
+      return colorMap[level]
+    },
+
 
 
 
@@ -100,56 +207,6 @@ export default {
       this.map.addLayer(layer)
     },
 
-
-    //随时间生成点和线
-    setTimeCreatePointLine(points) {
-      let index = 0;
-      let layer = new VectorLayer();
-      let source = new VectorSource();
-      layer.setSource(source)
-      let lineSetTime = setInterval(() => {
-        if (index == points.length - 1) clearInterval(lineSetTime);
-        let position = [points[index].lng, points[index].lat];
-        let featurePoint = new Feature({
-          geometry: new point(fromLonLat(position))
-        })
-        featurePoint.setStyle(new Style({
-          image: new Circle({
-            fill: new Fill({
-              color: this.judgeColorByWindLevel(points[index].strong)
-            }),
-            radius: 4
-          })
-        }))
-        source.addFeature(featurePoint);
-
-        if (index !=0) {
-          let lastPosition = [points[index - 1].lng, points[index - 1].lat];
-          let featureLine = new Feature({
-            geometry: new LineString([fromLonLat(lastPosition), fromLonLat(position)])
-          })
-          source.addFeature(featureLine)
-        }
-        index++;
-
-      }, 200)
-
-      this.map.addLayer(layer)
-    },
-
-
-    //根据台风等级设置点的颜色
-    judgeColorByWindLevel(level) {
-      let colorMap = {
-        "热带风暴": 'green',
-        "热带低压": 'blue',
-        "台风": 'pink',
-        "强热带风暴": 'red',
-        "强台风": 'yellow',
-        "超强台风": 'salmon',
-      }
-      return colorMap[level]
-    },
 
   },
 
