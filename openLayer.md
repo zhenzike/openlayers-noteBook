@@ -250,3 +250,130 @@ setTimeCreatePointLine(points) {  //参数points为点的坐标系信息以及�
 
 ### 绘制风圈
 
+根据每个点的坐标来绘制风圈，并删除上一个风圈：
+
+```js
+if(points[index].radius7.length!=0||points[index].radius7!=null){
+    let featureSolar=this.drawSolar(points[index]);
+    if(this.lastFeatureSolar!=null){
+        source.removeFeature(this.lastFeatureSolar)
+    }
+    this.lastFeatureSolar=featureSolar
+    source.addFeature(featureSolar)
+}
+```
+
+
+
+使用多边形绘制风圈：
+
+- **Polygon([positionArr1，positionArr2])**【这里接受的参数形式实际上是[[],[]]的形式，第一个数组为外部轮廓，第二个数组为内部挖孔，不传第二个数组则只有一个无挖孔的多边形】
+
+```js
+drawSolar(point) {
+    let positionArr=[];
+    let data_R_arr = point.radius7.split('|').map(k => {
+        return parseFloat(k)
+    })
+
+    let Configs = {
+        data_X: parseFloat(point.lng),
+        data_Y: parseFloat(point.lat),
+        data_R: {
+            "SE": data_R_arr[0]/100,
+            "NE": data_R_arr[1]/100,
+            "NW": data_R_arr[2]/100,
+            "SW": data_R_arr[3]/100
+        }
+    };
+
+    let _interval = 6
+    for (let i = 0; i < 360 / _interval; i++) {
+        let r = 0;
+        let angle = i * _interval;
+        if (angle > 0 && angle <= 90) {
+            r = Configs.data_R.NE;
+        }
+        else if (angle > 90 && angle <= 180) {
+            r = Configs.data_R.NW;
+        }
+        else if (angle > 180 && angle <= 270) {
+            r = Configs.data_R.SW;
+        }
+        else {
+            r = Configs.data_R.SE;
+        }
+
+        let x = Configs.data_X + r * Math.cos(angle * 3.14 / 180);
+        let y = Configs.data_Y + r * Math.sin(angle * 3.14 / 180);
+
+        positionArr.push(fromLonLat([x,y]))
+    }
+
+
+    let feature=new Feature({
+        geometry:new Polygon([positionArr])   //这里接受的参数形式实际上是[[],[]]的形式，第一个数组为外部轮廓，第二个数组为内部挖孔，不传则只有一个无挖孔的多边形
+    });
+    return feature
+},
+```
+
+
+
+
+
+### 点击事件以及hover事件
+
+**前置api**：
+
+- **getTargetElement ( ) { HTMLElementy }**: 获取 map实例正在渲染的dom 节点，返回一个element(节点)或者在没有目标的时候返回null
+- **forEachFeatureAtPixel ( pixel, callback, opt_options ) { T | undefined}** :在这个像素点遍历所有的feature ,如果有feature执行—个callback
+
+
+
+#### ol地图事件
+
+**绑定事件：map.on(type, listener)**
+
+**取消绑定：map.un(type, listener)**
+
+**type:事件类型**
+
+**listener：执行的函数体**
+
+```js
+//事件类型
+let type = {
+    click:'click',//单击
+    dblclick:'dblclick',//双击，双击会触发click
+    singleclick:'singleclick',//单击，延迟250毫秒，就算双击不会触发
+    moveend:'moveend',//鼠标滚动事件
+    pointermove:'pointermove',//鼠标移动事件
+    pointerdrag:'pointerdrag',//鼠标拖动事件
+    precompose:'precompose',//地图准备渲染，为渲染
+    postcompose:'postcompose',//地图渲染中
+    postrender:'postrender',//地图渲染全部结束
+    changeLayerGroup:'change:layerGroup',//地图图层增删时触发
+    changeSize:'change:size',//地图窗口发生变化就会触发
+    changeTarget:'change:target',//地图绑定的div发生更改时触发
+    changeView:'change:view',//地图view对象发生变化触发
+    propertychange:'propertychange',//Map对象中任意的property值改变时触发
+}
+```
+
+通常与**map.forEachFeatureAtPixel(pixel, callback)**搭配使用：
+
+```js
+//假如为地图绑定了hover事件，当鼠标划过地图时，可以获取到划过的像素点的信息，其中就有像素点的坐标pixel,此时搭配map.forEachFeatureAtPixel可获取到要素
+map.on('click',function(e){
+    //屏幕坐标
+    let pixel = this.map.getEventPixel(e.originalEvent);
+    //检测与视口上的像素相交的要素
+    map.forEachFeatureAtPixel(pixel,function(feature,layers){
+        //feature,返回的要素
+        console.log(feature)
+        //layers，返回的图层
+        console.log(layers)
+    })
+})
+```

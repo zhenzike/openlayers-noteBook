@@ -21,11 +21,14 @@ export default {
   data() {
     return {
       map: null,
+      lastFeatureSolar: null,
+      lastPointStyleFeature: null,
     }
   },
   mounted() {
     this.initMap();
     this.getData();
+    this.designHoverOnMap()
   },
   methods: {
     initMap() {
@@ -46,6 +49,7 @@ export default {
           minZoom: 2.5,
         }),
       });
+
     },
 
     getData() {
@@ -78,13 +82,17 @@ export default {
           })
         }))
 
-        if(points[index].radius7.length!=0||points[index].radius7!=null){
-          let featureSolar=this.drawSolar(points[index]);
+        if (points[index].radius7.length != 0 || points[index].radius7 != null) {
+          let featureSolar = this.drawSolar(points[index]);
+          if (this.lastFeatureSolar != null) {
+            source.removeFeature(this.lastFeatureSolar)
+          }
+          this.lastFeatureSolar = featureSolar
           source.addFeature(featureSolar)
         }
 
 
-
+        featurePoint.set('featerDataType', 'pointType')
         source.addFeature(featurePoint);
 
         if (index != 0) {
@@ -96,14 +104,14 @@ export default {
         }
         index++;
 
-      }, 600)
+      }, 300)
 
       this.map.addLayer(layer)
     },
 
     //绘制风圈
     drawSolar(point) {
-      let positionArr=[];
+      let positionArr = [];
       let data_R_arr = point.radius7.split('|').map(k => {
         return parseFloat(k)
       })
@@ -112,13 +120,13 @@ export default {
         data_X: parseFloat(point.lng),
         data_Y: parseFloat(point.lat),
         data_R: {
-          "SE": data_R_arr[0]/100,
-          "NE": data_R_arr[1]/100,
-          "NW": data_R_arr[2]/100,
-          "SW": data_R_arr[3]/100
+          "SE": data_R_arr[0] / 100,
+          "NE": data_R_arr[1] / 100,
+          "NW": data_R_arr[2] / 100,
+          "SW": data_R_arr[3] / 100
         }
       };
-    
+
       let _interval = 6
       for (let i = 0; i < 360 / _interval; i++) {
         let r = 0;
@@ -139,14 +147,49 @@ export default {
         let x = Configs.data_X + r * Math.cos(angle * 3.14 / 180);
         let y = Configs.data_Y + r * Math.sin(angle * 3.14 / 180);
 
-        positionArr.push(fromLonLat([x,y]))
+        positionArr.push(fromLonLat([x, y]))
       }
 
-     
-      let feature=new Feature({
-        geometry:new Polygon([positionArr])   //这里接受的参数形式实际上是[[],[]]的形式，第一个数组为外部轮廓，第二个数组为内部挖孔，不传则只有一个无挖孔的多边形
+
+      let feature = new Feature({
+        geometry: new Polygon([positionArr])   //这里接受的参数形式实际上是[[],[]]的形式，第一个数组为外部轮廓，第二个数组为内部挖孔，不传则只有一个无挖孔的多边形
       });
       return feature
+    },
+
+
+
+    designHoverOnMap() {
+      this.map.on('pointermove', e => {
+        let pixel = e.pixel;
+        let feature = this.map.forEachFeatureAtPixel(pixel, (featureData) => {
+          return featureData
+        })
+        if (feature) {  //存在要素
+          if (feature.get('featerDataType') == 'pointType') {
+            if (this.lastPointStyleFeature != null) {
+              this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
+              this.lastPointStyleFeature.changed()
+            }
+            this.map.getTargetElement().style.cursor = 'pointer'     //当划过的要点是指定的要素时，修改map的鼠标样式，其他情况下还原
+            feature.getStyle().getImage().setRadius(8)       //点要素半径是通过style对象中的image对象设置的，这里也需要逐层获取来设置
+            this.lastPointStyleFeature=feature;
+            feature.changed()
+          } else {
+            this.map.getTargetElement().style.cursor = ''
+            if (this.lastPointStyleFeature != null) {
+              this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
+              this.lastPointStyleFeature.changed()
+            }
+          }
+        } else {  //不存在要素
+          this.map.getTargetElement().style.cursor = ''
+          if (this.lastPointStyleFeature != null) {
+              this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
+              this.lastPointStyleFeature.changed()
+            }
+        }
+      })
     },
 
 
