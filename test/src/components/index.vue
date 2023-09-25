@@ -1,6 +1,7 @@
 <template>
   <div class="container">
     <div id="map" class="map"></div>
+    <toolTipDialog ref="toolTipDialog" :toolTipData="toolTipData"></toolTipDialog>
   </div>
 </template>
 <script>
@@ -14,21 +15,34 @@ import Vector from 'ol/layer/Vector'
 import VectorSource from 'ol/source/Vector';
 import point from 'ol/geom/Point';
 import { fromLonLat } from 'ol/proj';
-import { Circle, Style, Fill } from 'ol/style'
-import { LineString, MultiLineString, Polygon } from 'ol/geom';
+import { Circle as CircleStyle, Style, Fill } from 'ol/style'
+import { LineString, MultiLineString, Polygon, Circle } from 'ol/geom';
 import VectorLayer from 'ol/layer/Vector';
+import toolTipDialog from './zujian/toolTipDialog.vue';
+import Overlay from 'ol/Overlay';
 export default {
   data() {
     return {
       map: null,
       lastFeatureSolar: null,
       lastPointStyleFeature: null,
+      toolTipData: {
+        lng: '',
+        lat: ''
+      },
+      ovlayer: null
     }
   },
+
+  components: {
+    toolTipDialog
+  },
+
   mounted() {
     this.initMap();
     this.getData();
-    this.designHoverOnMap()
+    this.designHoverOnMap();
+    this.toolTipDialogFn()
   },
   methods: {
     initMap() {
@@ -74,7 +88,7 @@ export default {
           geometry: new point(fromLonLat(position))
         })
         featurePoint.setStyle(new Style({
-          image: new Circle({
+          image: new CircleStyle({
             fill: new Fill({
               color: this.judgeColorByWindLevel(points[index].strong)
             }),
@@ -83,7 +97,7 @@ export default {
         }))
 
         if (points[index].radius7.length != 0 || points[index].radius7 != null) {
-          let featureSolar = this.drawSolar(points[index]);
+          let featureSolar = this.drawAccurateSolar(points[index]);
           if (this.lastFeatureSolar != null) {
             source.removeFeature(this.lastFeatureSolar)
           }
@@ -92,7 +106,8 @@ export default {
         }
 
 
-        featurePoint.set('featerDataType', 'pointType')
+        featurePoint.set('featerDataType', 'pointType');
+        featurePoint.set('featerData', points[index])
         source.addFeature(featurePoint);
 
         if (index != 0) {
@@ -109,7 +124,7 @@ export default {
       this.map.addLayer(layer)
     },
 
-    //绘制风圈
+    //使用多边形绘制风圈
     drawSolar(point) {
       let positionArr = [];
       let data_R_arr = point.radius7.split('|').map(k => {
@@ -157,8 +172,53 @@ export default {
       return feature
     },
 
+    //使用canvas准确的绘制风圈
+    drawAccurateSolar(point) {
+      let data_R_arr = point.radius7.split('|').map(k => {
+        return parseFloat(k)
+      })
+      let Configs = {
+        data_X: parseFloat(point.lng),
+        data_Y: parseFloat(point.lat),
+        data_R: {
+          "SE": data_R_arr[0]* 1100,
+          "NE": data_R_arr[1]* 1100,
+          "NW": data_R_arr[2]* 1100,
+          "SW": data_R_arr[3]* 1100
+        }
+      };
+     
+      const circleFeature = new Feature({
+        geometry: new Circle(fromLonLat([point.lng, point.lat])),
+      });
+    
+      circleFeature.setStyle(
+        new Style({
+          renderer(coordinates, state) {   //渲染器通常使用canvas,coordinates：表示要素的几何坐标 ,states是一个对象，具有context：绘图上下文对象、resolution：分辨率。它表示当前地图的分辨率，可以用于计算绘制元素时的距离、大小等，以及其他属性
+            let [x, y] = coordinates[0];
+            const ctx = state.context;
+            ctx.beginPath();
+            let count=1;
+            for (let i in Configs.data_R) {
+              let radius=0.5*Math.PI*count
+              let distance=Configs.data_R[i] /state.resolution
+              ctx.arc(x,y,distance,radius-0.5*Math.PI,radius);
+              count++;
+            }
+            ctx.fillStyle='rgba(246, 57, 14, 0.3)';
+            ctx.fill();
+            ctx.closePath();
+          }
+        })
+      )
+
+      circleFeature.set('AccurateSolar',true)
+      return   circleFeature;
+
+    },
 
 
+    //划动事件
     designHoverOnMap() {
       this.map.on('pointermove', e => {
         let pixel = e.pixel;
@@ -173,23 +233,46 @@ export default {
             }
             this.map.getTargetElement().style.cursor = 'pointer'     //当划过的要点是指定的要素时，修改map的鼠标样式，其他情况下还原
             feature.getStyle().getImage().setRadius(8)       //点要素半径是通过style对象中的image对象设置的，这里也需要逐层获取来设置
-            this.lastPointStyleFeature=feature;
-            feature.changed()
+            this.lastPointStyleFeature = feature;
+            feature.changed();
+
+            let featerData = feature.get('featerData')    //获取要素携带的数据，这里是设置要素时手动添加的属性
+
+            this.toolTipData.lng = featerData.lng;
+            this.toolTipData.lat = featerData.lat;
+            this.ovlayer.setPosition(feature.geometryChangeKey_.target.flatCoordinates)  //设置叠加层的位置
           } else {
             this.map.getTargetElement().style.cursor = ''
             if (this.lastPointStyleFeature != null) {
               this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
               this.lastPointStyleFeature.changed()
             }
+            this.ovlayer.setPosition(undefined)
           }
         } else {  //不存在要素
           this.map.getTargetElement().style.cursor = ''
           if (this.lastPointStyleFeature != null) {
-              this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
-              this.lastPointStyleFeature.changed()
-            }
+            this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
+            this.lastPointStyleFeature.changed()
+          }
+          this.ovlayer.setPosition(undefined)
         }
       })
+    },
+
+
+    //挂载叠加层
+    toolTipDialogFn() {
+      this.ovlayer = new Overlay({
+        element: this.$refs.toolTipDialog.$el,
+        autoPan: {
+          animation: {
+            duration: 250,
+          },
+        },
+        position: undefined,   //初始位置
+      })
+      this.map.addOverlay(this.ovlayer)   //将叠加层挂载到地图上
     },
 
 
@@ -219,7 +302,7 @@ export default {
           geometry: new point(fromLonLat(position))
         });
         featurePoint.setStyle(new Style({    //为要素对象设置颜色需要使用setStyle方法,并需要引入一个Style对象
-          image: new Circle({     //声明样式形状为圆形
+          image: new CircleStyle({     //声明样式形状为圆形
             fill: new Fill({   //声明填充颜色，也需要引入fill对象
               color: this.judgeColorByWindLevel(k.strong)
             }),
@@ -268,6 +351,7 @@ body {
   width: 100vw;
   height: 100vh;
   text-align: center;
+ 
 }
 
 .map {
