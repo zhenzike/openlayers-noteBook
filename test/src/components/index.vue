@@ -1,5 +1,9 @@
 <template>
   <div class="container">
+    <div style="display: flex;">  
+      <el-button type="primary" size="mini" @click=""></el-button>
+      <el-button type="primary" size="mini" @click=""></el-button>
+    </div>
     <div id="map" class="map"></div>
     <toolTipDialog ref="toolTipDialog" :toolTipData="toolTipData"></toolTipDialog>
   </div>

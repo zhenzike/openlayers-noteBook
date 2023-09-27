@@ -96,11 +96,11 @@ a.skiplink:focus {
 }
 ```
 
-## 台风实例
+# 台风实例
 
 数据可获取 台风路径 网通过控制台获取台风路径数据，之后将数据放置在public下的json文件中(自己创建)，这样可用ajax来请求本地文件来模拟网络请求
 
-### 绘制点
+## 绘制点
 
 ```js
 initMap() {
@@ -147,7 +147,7 @@ initMap() {
     },
 ```
 
-### 添加样式(setStyle)
+## 添加样式(setStyle)
 
 ```js
 //接绘制点后，可以在将单个要素保存到要素数组前，设置其样式
@@ -168,7 +168,7 @@ points.forEach(k => {
 })
 ```
 
-### 绘制连线
+## 绘制连线
 
 连线有两种：
 
@@ -207,7 +207,7 @@ let  lineFeature=new  Feature({  //设置多点连线要素
 features.push(lineFeature)
 ```
 
-#### 定时绘制点与连线
+### 定时绘制点与连线
 
 ```js
 setTimeCreatePointLine(points) {  //参数points为点的坐标系信息以及描述
@@ -248,7 +248,7 @@ setTimeCreatePointLine(points) {  //参数points为点的坐标系信息以及�
 
 
 
-### 绘制风圈
+## 绘制风圈(多边形)
 
 根据每个点的坐标来绘制风圈，并删除上一个风圈：
 
@@ -262,8 +262,6 @@ if(points[index].radius7.length!=0||points[index].radius7!=null){
     source.addFeature(featureSolar)
 }
 ```
-
-
 
 使用多边形绘制风圈：
 
@@ -318,20 +316,66 @@ drawSolar(point) {
 },
 ```
 
+## 准确绘制风圈(canvas)
+
+可以使用ol自带的渲染器结合canvans进行渲染
+
+```js
+    drawAccurateSolar(point) {
+      let data_R_arr = point.radius7.split('|').map(k => {
+        return parseFloat(k)
+      })
+
+      let Configs = {
+        data_X: parseFloat(point.lng),
+        data_Y: parseFloat(point.lat),
+        data_R: {
+          "SE": data_R_arr[0]* 1100,
+          "NE": data_R_arr[1]* 1100,
+          "NW": data_R_arr[2]* 1100,
+          "SW": data_R_arr[3]* 1100
+        }
+      };
+     
+      const circleFeature = new Feature({
+        geometry: new Circle(fromLonLat([point.lng, point.lat])),
+      });
+    
+      circleFeature.setStyle(
+        new Style({
+          renderer(coordinates, state) {   //渲染器通常使用canvas,coordinates：表示要素的几何坐标 ,states是一个对象，具有context：绘图上下文对象、resolution：分辨率。它表示当前地图的分辨率，可以用于计算绘制元素时的距离、大小等，以及其他属性
+            let [x, y] = coordinates[0];
+            const ctx = state.context;
+            ctx.beginPath();
+            let count=1;
+            for (let i in Configs.data_R) {
+              let radius=0.5*Math.PI*count
+              let distance=Configs.data_R[i] /state.resolution
+              ctx.arc(x,y,distance,radius-0.5*Math.PI,radius);
+              count++;
+            }
+            ctx.fillStyle='rgba(246, 57, 14, 0.3)';
+            ctx.fill();
+            ctx.closePath();
+          }
+        })
+      )
+
+      circleFeature.set('AccurateSolar',true)
+      return   circleFeature;
+    },
+```
 
 
 
-
-### 点击事件以及hover事件
+## ol地图事件
 
 **前置api**：
 
 - **getTargetElement ( ) { HTMLElementy }**: 获取 map实例正在渲染的dom 节点，返回一个element(节点)或者在没有目标的时候返回null
 - **forEachFeatureAtPixel ( pixel, callback, opt_options ) { T | undefined}** :在这个像素点遍历所有的feature ,如果有feature执行—个callback
 
-
-
-#### ol地图事件
+### 常用事件
 
 **绑定事件：map.on(type, listener)**
 
@@ -377,3 +421,102 @@ map.on('click',function(e){
     })
 })
 ```
+
+### 为地图绑定事件
+
+```js
+//划动事件
+designHoverOnMap() {
+    this.map.on('pointermove', e => {   //为地图绑定滑动事件
+        let pixel = e.pixel;
+        let feature = this.map.forEachFeatureAtPixel(pixel, (featureData) => { //通过forEachFeatureAtPixel将与该像素相交的要素返回
+            return featureData
+        })
+        if (feature) {  //如果该像素点存在要素
+            if (feature.get('featerDataType') == 'pointType') {
+                if (this.lastPointStyleFeature != null) {
+                    this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
+                    this.lastPointStyleFeature.changed()
+                }
+                this.map.getTargetElement().style.cursor = 'pointer'     //当划过的要点是指定的要素时，修改map的鼠标样式，其他情况下还原
+                feature.getStyle().getImage().setRadius(8)       //点要素半径是通过style对象中的image对象设置的，这里也需要逐层获取来设置
+                this.lastPointStyleFeature = feature;
+                feature.changed();
+
+                let featerData=feature.get('featerData')    //获取要素携带的数据，这里是设置要素时手动添加的属性
+
+                this.toolTipData.lng=featerData.lng;
+                this.toolTipData.lat=featerData.lat;
+                this.ovlayer.setPosition(feature.geometryChangeKey_.target.flatCoordinates)  //设置叠加层的位置
+            } else {
+                this.map.getTargetElement().style.cursor = ''
+                if (this.lastPointStyleFeature != null) {
+                    this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
+                    this.lastPointStyleFeature.changed()
+                }
+                this.ovlayer.setPosition(undefined)
+            }
+        } else {  //不存在要素
+            this.map.getTargetElement().style.cursor = ''
+            if (this.lastPointStyleFeature != null) {
+                this.lastPointStyleFeature.getStyle().getImage().setRadius(4);
+                this.lastPointStyleFeature.changed()
+            }
+            this.ovlayer.setPosition(undefined)
+        }
+    })
+},
+
+```
+
+
+
+## 叠加层(overlay)
+
+可用于信息提示框之类的效果
+
+### 挂载叠加层
+
+```js
+<toolTipDialog ref="toolTipDialog" :toolTipData="toolTipData"></toolTipDialog> //这里可用组件设置叠加层效果
+//-----------------------------------以上为html--------------------
+//挂载叠加层
+toolTipDialogFn() {
+    this.ovlayer = new Overlay({    // Overlay需要引入
+        element: this.$refs.toolTipDialog.$el,  //这里需要获得叠加层的dom对象，在vue中可通过refs获取
+        autoPan: {                   
+            animation: {                 //设置叠加层的自动平移的效果，用时250毫秒【当叠加层的显示内容超出视图，将会自动平移至可完全显示叠加层的位置】
+                duration: 250,
+            },
+        },
+        position:undefined,   //初始位置
+    })
+    this.map.addOverlay(this.ovlayer)   //将叠加层挂载到地图上
+}, 
+```
+
+### 设置叠加层数据(set)
+
+==要素本身不携带数据==，因此在生成要素时，需要手动为要素设置属性，用以获取数据。
+
+```js
+featurePoint.set('featerData', points[index]) //在前面例子中，使用set为点要素添加 属性和值
+//获取到数据后，可通过prop向叠加层传递数据，如：
+let featerData=feature.get('featerData')
+this.toolTipData.lng=featerData.lng;
+this.toolTipData.lat=featerData.lat;
+```
+
+### 设置叠加层位置
+
+在划过事件中，当划过的要素确认为需要的要素时，可将该要素的坐标传递设置给叠加层,此时叠加层将会出现在要素位置
+
+```js
+this.ovlayer.setPosition(feature.geometryChangeKey_.target.flatCoordinates)  
+```
+
+
+
+## 交互
+
+### 测距
