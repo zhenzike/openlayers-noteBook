@@ -32,7 +32,8 @@ import VectorLayer from "ol/layer/Vector";
 import toolTipDialog from "./zujian/toolTipDialog.vue";
 import Overlay from "ol/Overlay";
 import Draw from "ol/interaction/Draw.js";
-import { getLength} from 'ol/sphere.js';
+import { getLength } from "ol/sphere.js";
+import { unByKey } from "ol/Observable.js";
 export default {
   data() {
     return {
@@ -320,7 +321,11 @@ export default {
         if (feature) {
           helpMsgs = "双击地图作为结束点";
         }
-        let tip = this.createHelpTooltip(helpTooltipElement, helpTooltip,[15,0]);
+        let tip = this.createHelpTooltip(
+          helpTooltipElement,
+          helpTooltip,
+          [15, 0]
+        );
         helpTooltipElement = tip[0];
         helpTooltip = tip[1];
         helpTooltipElement.innerHTML = helpMsgs;
@@ -336,14 +341,14 @@ export default {
       draw.on("drawstart", (e) => {
         feature = e.feature;
         let tooltipCoord = e.coordinate;
-        listener = feature.getGeometry().on("change", (evt) =>{
+        listener = feature.getGeometry().on("change", (evt) => {
           const geom = evt.target;
           let output;
-          output = this.formatLength(geom)
+          output = this.formatLength(geom);
           let tip = this.createHelpTooltip(
             measureTooltipElement,
             measureTooltip,
-            [0,-15]
+            [0, -15]
           );
           measureTooltipElement = tip[0];
           measureTooltip = tip[1];
@@ -351,6 +356,15 @@ export default {
           measureTooltipElement.innerHTML = output;
           measureTooltip.setPosition(tooltipCoord);
         });
+      });
+
+      draw.on("drawend", () => {
+        measureTooltipElement.className = "ol-tooltip ol-tooltip-static";
+        measureTooltip.setOffset([0, -15]);
+        feature = null;
+        measureTooltipElement = null;
+        this.createHelpTooltip(null, null, [0, -15]);
+        unByKey(listener);
       });
 
       this.map.addLayer(layer);
@@ -368,7 +382,7 @@ export default {
     },
 
     //鼠标跟随提醒
-    createHelpTooltip(element, tip,offset) {
+    createHelpTooltip(element, tip, offset) {
       if (element) {
         element.parentNode.removeChild(element);
       }
