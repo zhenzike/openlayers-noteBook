@@ -45,6 +45,10 @@ export default {
         lat: "",
       },
       ovlayer: null,
+      helpTooltip: "",
+      helpTooltipElement: "",
+      drawLineLayer: [],
+      measureTooltipLayerArr:[]
     };
   },
 
@@ -311,26 +315,24 @@ export default {
       });
 
       let feature;
-      let helpTooltip;
-      let helpTooltipElement;
       let measureTooltipElement;
       let measureTooltip;
       let draw;
-      this.map.on("pointermove", (e) => {
+      let pointermoveEvent = this.map.on("pointermove", (e) => {
         let helpMsgs = "点击地图作为目标点";
         if (feature) {
           helpMsgs = "双击地图作为结束点";
         }
         let tip = this.createHelpTooltip(
-          helpTooltipElement,
-          helpTooltip,
+          this.helpTooltipElement,
+          this.helpTooltip,
           [15, 0]
         );
-        helpTooltipElement = tip[0];
-        helpTooltip = tip[1];
-        helpTooltipElement.innerHTML = helpMsgs;
-        helpTooltip.setPosition(e.coordinate);
-        helpTooltipElement.classList.remove("hidden");
+        this.helpTooltipElement = tip[0];
+        this.helpTooltip = tip[1];
+        this.helpTooltipElement.innerHTML = helpMsgs;
+        this.helpTooltip.setPosition(e.coordinate);
+        this.helpTooltipElement.classList.remove("hidden");
       });
 
       draw = this.drawFn(source, draw); //添加绘制交互
@@ -350,8 +352,10 @@ export default {
             measureTooltip,
             [0, -15]
           );
+
           measureTooltipElement = tip[0];
           measureTooltip = tip[1];
+          this.measureTooltipLayerArr.push(measureTooltip)
           tooltipCoord = geom.getLastCoordinate();
           measureTooltipElement.innerHTML = output;
           measureTooltip.setPosition(tooltipCoord);
@@ -359,14 +363,21 @@ export default {
       });
 
       draw.on("drawend", () => {
-        measureTooltipElement.className = "ol-tooltip ol-tooltip-static";
-        measureTooltip.setOffset([0, -15]);
+        // measureTooltipElement.className = "ol-tooltip ol-tooltip-static";
+        // measureTooltip.setOffset([0, -15]);
         feature = null;
         measureTooltipElement = null;
-        this.createHelpTooltip(null, null, [0, -15]);
-        unByKey(listener);
+
+        unByKey(listener); //用于取消事件绑定
+        this.map.removeInteraction(draw);
+        this.helpTooltipElement.classList.add("hidden");
+        unByKey(pointermoveEvent);
       });
 
+      this.map.getViewport().addEventListener("mouseout", (e) => {
+        this.helpTooltipElement.classList.add("hidden");
+      });
+      this.drawLineLayer.push(layer);
       this.map.addLayer(layer);
     },
 
@@ -384,10 +395,10 @@ export default {
     //鼠标跟随提醒
     createHelpTooltip(element, tip, offset) {
       if (element) {
-        element.parentNode.removeChild(element);
+        this.map.removeOverlay(tip);
       }
       element = document.createElement("div");
-      element.className = "ol-tooltip hidden";
+      // element.className = "ol-tooltip ";
       tip = new Overlay({
         element: element,
         offset: offset,
@@ -426,7 +437,15 @@ export default {
     },
 
     //结束测距
-    stopMeasure() {},
+    stopMeasure() {
+      this.drawLineLayer.forEach((k) => {
+        this.map.removeLayer(k);
+      });
+
+      this.measureTooltipLayerArr.forEach(k=>{
+        this.map.removeOverlay(k);
+      })
+    },
 
     //根据台风等级设置点的颜色
     judgeColorByWindLevel(level) {
@@ -488,9 +507,13 @@ export default {
   },
 };
 </script>
-<style  scoped>
+<style lang="less" scoped>
 body {
   padding: 0 !important;
+}
+
+/deep/ .hidden {
+  display: none;
 }
 
 .container {

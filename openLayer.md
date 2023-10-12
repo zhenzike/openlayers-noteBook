@@ -469,6 +469,15 @@ designHoverOnMap() {
 
 ```
 
+### 解绑
+
+```js
+//可以使用变量存储绑定的事件
+let listenObj= this.map.on('pointermove', e => {})
+//之后就可以使用unByKey('事件名')来接触绑定
+unByKey('listenObj')
+```
+
 
 
 ## 叠加层(overlay)
